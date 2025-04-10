@@ -1,0 +1,91 @@
+report zha_ai_week1_d1.
+
+class guess_number definition.
+  public section.
+
+    methods constructor.
+    methods add_to_list importing iv_number type i.
+    methods get_attempt_count returning value(rv_result) type i.
+    methods print_wrong_guesses.
+    methods check_number
+      importing iv_number        type i
+      returning value(rv_result) type abap_bool.
+    methods compare_hint
+      importing iv_number        type i
+      returning value(rv_result) type string.
+
+  protected section.
+  private section.
+    data: target_number type i,
+          attempts      type standard table of i.
+endclass.
+
+class guess_number implementation.
+
+  method constructor.
+    data(lo_random) = cl_abap_random_int=>create(
+                        seed = cl_abap_random=>seed( )
+                        min  = 1
+                        max  = 100 ).
+    target_number = lo_random->get_next( ).
+  endmethod.
+
+  method add_to_list.
+    append iv_number to attempts.
+  endmethod.
+
+  method get_attempt_count.
+    rv_result = lines( attempts ).
+  endmethod.
+
+  method print_wrong_guesses.
+    data: lv_output type string.
+    loop at attempts into data(lv_item).
+      lv_output = cond #(
+        when lv_output is initial then |{ lv_item }|
+        when lv_output is not initial then |{ lv_output },{ lv_item }| ).
+    endloop.
+    write: / lv_output.
+  endmethod.
+
+  method check_number.
+    add_to_list( iv_number ).
+    if iv_number = target_number.
+      rv_result = abap_true.
+    else.
+      rv_result = abap_false.
+    endif.
+  endmethod.
+
+  method compare_hint.
+    rv_result = cond #(
+      when target_number > iv_number then |{ iv_number } is too low|
+      when target_number < iv_number then |{ iv_number } is too high| ).
+  endmethod.
+
+endclass.
+
+data: lo_game  type ref to guess_number,
+      lv_found type abap_bool value abap_false,
+      lv_input type i.
+
+start-of-selection.
+  lo_game = new guess_number( ).
+
+  while lv_found = abap_false.
+    parameters: p_input type i.
+    call selection-screen 1000.
+    lv_input = p_input.
+
+    lv_found = lo_game->check_number( lv_input ).
+
+    if lv_found = abap_false.
+      message lo_game->compare_hint( lv_input ) type 'S'.
+    endif.
+  endwhile.
+
+  write: / |Congratulations! You guessed it in { lo_game->get_attempt_count( ) } attempts.|.
+
+  lo_game->print_wrong_guesses( ).
+  new-line.
+  write: / sy-uname.
