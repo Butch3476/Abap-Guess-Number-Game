@@ -1,20 +1,26 @@
-report zha_ai_week1_d1.
+*------------------------------------------------------------------
+*  Program Name: ZHA_SAP04_HW_21
+*  Date   : 05.08.2025        Author : USERHA-Hakan Arslan
+*
+*  Comment:
+*          Sayi Tahmin Oyunu (Otomatik Yeniden Başlatma Özellikli)
+*------------------------------------------------------------------
+report zha_sap04_hw_21.
 
 class guess_number definition.
   public section.
-
     methods constructor.
     methods add_to_list importing iv_number type i.
     methods get_attempt_count returning value(rv_result) type i.
-    methods print_wrong_guesses.
+    methods get_wrong_guesses returning value(rv_result) type string.
     methods check_number
       importing iv_number        type i
       returning value(rv_result) type abap_bool.
     methods compare_hint
       importing iv_number        type i
       returning value(rv_result) type string.
-
-  protected section.
+    methods get_target_number returning value(rv_number) type i.
+    methods reset_game.
   private section.
     data: target_number type i,
           attempts      type standard table of i.
@@ -23,11 +29,7 @@ endclass.
 class guess_number implementation.
 
   method constructor.
-    data(lo_random) = cl_abap_random_int=>create(
-                        seed = cl_abap_random=>seed( )
-                        min  = 1
-                        max  = 100 ).
-    target_number = lo_random->get_next( ).
+    reset_game( ).
   endmethod.
 
   method add_to_list.
@@ -38,14 +40,14 @@ class guess_number implementation.
     rv_result = lines( attempts ).
   endmethod.
 
-  method print_wrong_guesses.
+  method get_wrong_guesses.
     data: lv_output type string.
     loop at attempts into data(lv_item).
       lv_output = cond #(
         when lv_output is initial then |{ lv_item }|
-        when lv_output is not initial then |{ lv_output },{ lv_item }| ).
+        when lv_output is not initial then |{ lv_output }, { lv_item }| ).
     endloop.
-    write: / lv_output.
+    rv_result = lv_output.
   endmethod.
 
   method check_number.
@@ -59,33 +61,123 @@ class guess_number implementation.
 
   method compare_hint.
     rv_result = cond #(
-      when target_number > iv_number then |{ iv_number } is too low|
-      when target_number < iv_number then |{ iv_number } is too high| ).
+      when target_number > iv_number then |{ iv_number } çok küçük|
+      when target_number < iv_number then |{ iv_number } çok büyük| ).
+  endmethod.
+
+  method get_target_number.
+    rv_number = target_number.
+  endmethod.
+
+  method reset_game.
+    clear attempts.
+    data(lo_random) = cl_abap_random_int=>create(
+                        seed = cl_abap_random=>seed( )
+                        min  = 1
+                        max  = 100 ).
+    target_number = lo_random->get_next( ).
   endmethod.
 
 endclass.
 
-data: lo_game  type ref to guess_number,
-      lv_found type abap_bool value abap_false,
-      lv_input type i.
+data: lo_game     type ref to guess_number,
+      lv_found    type abap_bool value abap_false,
+      lv_input    type i,
+      gv_message  type string,
+      gv_attempts type string,
+      gv_count    type string,
+      gv_restart  type abap_bool.
+
+selection-screen begin of screen 1001 as window title tt01.
+selection-screen begin of block blk1 with frame title textf1 no intervals.
+
+selection-screen comment /1(50) text1.
+selection-screen comment /1(50) text11.
+selection-screen skip 1.
+
+parameters: p_input type i modif id inp.
+selection-screen skip 1.
+
+selection-screen begin of line.
+selection-screen: pushbutton (20) btn_gues user-command guess.
+selection-screen: pushbutton (20) btn_rest user-command restart.
+selection-screen end of line.
+
+selection-screen comment /1(50) text2.
+selection-screen comment /1(50) text3.
+selection-screen comment /1(50) text4.
+selection-screen comment /1(50) text5.
+selection-screen skip 1.
+
+selection-screen end of block blk1.
+
+selection-screen end of screen 1001.
+
+initialization.
+  create object lo_game.
+  tt01 = 'Sayı Tahmin Oyunu'.
+  textf1 = 'Sayı Girişi'.
+  text1 = 'Lütfen 1 ile 100 arasında bir sayı giriniz ve'.
+  text11 = 'butona basınız:'.
+  btn_gues = 'Tahmin Et'.
+  btn_rest = 'Yeni Oyun'.
+  text2 = ''.
+  text3 = ''.
+  text4 = ''.
+  text5 = ''.
+
+at selection-screen on p_input.
+  perform guess_process.
+
+at selection-screen.
+
+  if sy-ucomm = 'GUESS'.
+    perform guess_process.
+  endif.
+  if sy-ucomm = 'RESTART'.
+    lo_game->reset_game( ).
+    clear: p_input, gv_message, gv_attempts, gv_count, lv_found.
+    text2 = ''.
+    text3 = ''.
+    text4 = ''.
+    message 'Yeni oyun başlatıldı!' type 'I'.
+  endif.
 
 start-of-selection.
-  lo_game = new guess_number( ).
+  call screen 1001.
 
-  while lv_found = abap_false.
-    parameters: p_input type i.
-    call selection-screen 1000.
+end-of-selection.
+form guess_process.
+  if p_input is initial or p_input < 1 or p_input > 100.
+    message 'Lütfen 1-100 arasında geçerli bir sayı giriniz' type 'E'.
+  else.
     lv_input = p_input.
-
     lv_found = lo_game->check_number( lv_input ).
 
-    if lv_found = abap_false.
-      message lo_game->compare_hint( lv_input ) type 'S'.
+    if lv_found = abap_true.
+      gv_message = |Tebrikler! { lo_game->get_target_number( ) } sayısını buldunuz.|.
+      gv_attempts = |Toplam deneme: { lo_game->get_attempt_count( ) }|.
+      gv_count = |Tahminleriniz: { lo_game->get_wrong_guesses( ) }|.
+
+      text2 = gv_message.
+      text3 = gv_attempts.
+      text4 = gv_count.
+
+      message gv_message type 'I'.
+    else.
+      gv_message = lo_game->compare_hint( lv_input ).
+      gv_attempts = |Deneme sayısı: { lo_game->get_attempt_count( ) }|.
+      gv_count = |Tahminleriniz: { lo_game->get_wrong_guesses( ) }|.
+
+      text2 = gv_message.
+      text3 = gv_attempts.
+      text4 = gv_count.
+*      if lo_game->get_attempt_count(  ) > 9.
+*        text5 = substring( val = gv_count off = strlen( gv_count ) - 1 len = strlen( gv_count ) - 50 ).
+*      else.text4 = gv_count.
+*      endif.
     endif.
-  endwhile.
+  endif.
 
-  write: / |Congratulations! You guessed it in { lo_game->get_attempt_count( ) } attempts.|.
 
-  lo_game->print_wrong_guesses( ).
-  new-line.
-  write: / sy-uname.
+endform.
